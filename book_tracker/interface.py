@@ -145,8 +145,9 @@ class Interface:
                     author = stdscr.instr(4, 12, 48)
                     year = stdscr.instr(5, 12, 4)
                     pages = stdscr.instr(6, 12, 4)
-                    self.books.append(book.Book(name, author, year, pages))
-                    self.main_menu(stdscr)
+                    if book.valid_book_definition(name, author, year, pages):
+                        self.books.append(book.Book(name, author, year, pages))
+                        self.main_menu(stdscr)
             elif current_item == 5:
                 stdscr.addstr(3, 1, '□ Title: ')
                 stdscr.addstr(4, 1, '□ Author: ')
