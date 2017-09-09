@@ -1,14 +1,49 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import book
 
 import curses
 import time
-import book
-
+import sys
+import yaml
+import os
+import errno
 
 class Interface:
     def __init__(self):
         self.books = []
+        self.load()
+
+    def save(self):
+        """ Saves the user data to ~/.book_tracker/pydo.yaml """
+        home_dir = os.path.expanduser('~')
+        user_dir = os.path.join(home_dir, '.book_tracker')
+        try:
+            os.makedirs(user_dir)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+
+        user_path = os.path.join(user_dir, 'pydo.yaml')
+
+        with open(user_path, 'w') as books_file:
+            yaml.dump(self.books, books_file)
+
+    def load(self):
+        """ Loads the user data from ~/.book_tracker/pydo.yaml"""
+        home_dir = os.path.expanduser('~')
+        user_dir = os.path.join(home_dir, '.book_tracker')
+        user_path = os.path.join(user_dir, 'pydo.yaml')
+
+        try:
+            with open(user_path, 'r') as books_file:
+                self.books = yaml.load(books_file)
+        except IOError:
+            self.books = []
+            pass
+        except yaml.YAMLError:
+            self.books = []
+            pass
 
     def run_loop(self):
         curses.wrapper(self.curses_main)
@@ -141,13 +176,14 @@ class Interface:
                 stdscr.addstr(8, 1, '□ Cancel')
                 c = stdscr.getkey()
                 if c == '\n':
-                    name = stdscr.instr(3, 12, 48)
-                    author = stdscr.instr(4, 12, 48)
-                    year = stdscr.instr(5, 12, 4)
-                    pages = stdscr.instr(6, 12, 4)
+                    name = stdscr.instr(3, 12, 48).decode('UTF-8').rstrip()
+                    author = stdscr.instr(4, 12, 48).decode('UTF-8').rstrip()
+                    year = stdscr.instr(5, 12, 4).decode('UTF-8').rstrip()
+                    pages = stdscr.instr(6, 12, 4).decode('UTF-8').rstrip()
                     if book.valid_book_definition(name, author, year, pages):
-                        self.books.append(book.Book(name, author, year, pages))
-                        self.main_menu(stdscr)
+                        self.books.append(book.Book(name, author, int(year), int(pages)))
+                        self.save()
+                        break
             elif current_item == 5:
                 stdscr.addstr(3, 1, '□ Title: ')
                 stdscr.addstr(4, 1, '□ Author: ')
@@ -157,4 +193,6 @@ class Interface:
                 stdscr.addstr(8, 1, '▣ Cancel')
                 c = stdscr.getkey()
                 if c == '\n':
-                    self.main_menu(stdscr)
+                    break
+
+        self.main_menu(stdscr)
