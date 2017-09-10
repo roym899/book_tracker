@@ -9,9 +9,14 @@ import yaml
 import os
 import errno
 
-class Interface:
+class Environment:
     def __init__(self):
         self.books = []
+        self.issues = []
+
+class Interface:
+    def __init__(self):
+        self.environment = Environment()
         self.load()
 
     def save(self):
@@ -24,25 +29,25 @@ class Interface:
             if e.errno != errno.EEXIST:
                 raise
 
-        user_path = os.path.join(user_dir, 'books.yaml')
+        user_path = os.path.join(user_dir, 'environment.yaml')
 
         with open(user_path, 'w') as books_file:
-            yaml.dump(self.books, books_file)
+            yaml.dump(self.environment, books_file)
 
     def load(self):
         """ Loads the user data from ~/.book_tracker/books.yaml"""
         home_dir = os.path.expanduser('~')
         user_dir = os.path.join(home_dir, '.book_tracker')
-        user_path = os.path.join(user_dir, 'books.yaml')
+        user_path = os.path.join(user_dir, 'environment.yaml')
 
         try:
             with open(user_path, 'r') as books_file:
-                self.books = yaml.load(books_file)
+                self.environment = yaml.load(books_file)
         except IOError:
-            self.books = []
+            self.environment = Environment()
             pass
         except yaml.YAMLError:
-            self.books = []
+            self.environment = Environment()
             pass
 
     def run_loop(self):
@@ -218,7 +223,7 @@ class Interface:
                     year = stdscr.instr(5, 12, 4).decode('UTF-8').rstrip()
                     pages = stdscr.instr(6, 12, 4).decode('UTF-8').rstrip()
                     if book.valid_book_definition(name, author, year, pages):
-                        self.books.append(book.Book(name, author, int(year), int(pages)))
+                        self.environment.books.append(book.Book(name, author, int(year), int(pages)))
                         self.save()
                         break
             elif current_item == 5:
@@ -243,8 +248,8 @@ class Interface:
             row = 0
             c = ' '
             # shift is there so more books so you can scroll the list if there are more books than terminal lines
-            shift = min(current_item - curses.LINES + 5, len(self.books) - curses.LINES + 3)
-            for book_count, book in enumerate(self.books):
+            shift = min(current_item - curses.LINES + 5, len(self.environment.books) - curses.LINES + 3)
+            for book_count, book in enumerate(self.environment.books):
                 if shift > 0:
                     shift = shift - 1
                     continue
@@ -262,11 +267,11 @@ class Interface:
             c = stdscr.getkey()
 
             if c == 'KEY_RIGHT' or c == '\n':
-                self.book_reading(stdscr, self.books[current_item])
+                self.book_reading(stdscr, self.environment.books[current_item])
             if c == 'KEY_UP':
-                current_item = (current_item - 1 + len(self.books)) % len(self.books)
+                current_item = (current_item - 1 + len(self.environment.books)) % len(self.environment.books)
             if c == 'KEY_DOWN':
-                current_item = (current_item + 1 + len(self.books)) % len(self.books)
+                current_item = (current_item + 1 + len(self.environment.books)) % len(self.environment.books)
             if c == 'KEY_LEFT':
                 break
 

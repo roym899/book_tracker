@@ -1,13 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+
+class PageState:
+    UNREAD = -1
+    GOOD = 0
+
+
 class Book:
     """Representation of a book"""
     def __init__(self, name, author, year, pages):
         self.name = name
         self.author = author
         self.year = year
-        self.pages = pages
+        self.pages = [PageState.UNREAD for i in range(pages)]
 
 
 def valid_book_definition(name, author, year, pages):
