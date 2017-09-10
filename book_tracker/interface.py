@@ -48,21 +48,62 @@ class Interface:
     def run_loop(self):
         curses.wrapper(self.curses_main)
 
+    def color_testing(self, stdscr):
+        curses.init_pair(1, 255, 236)
+        stdscr.bkgd(0, curses.color_pair(1))
+
+        for i in range(0, curses.COLORS):
+            curses.init_pair(i + 1, i, 236)
+        try:
+            for i in range(0, 255):
+                stdscr.addstr(str(i-1), curses.color_pair(i))
+        except curses.ERR:
+            # End of screen reached
+            pass
+
+        stdscr.getch()
+        stdscr.clear()
+
+
     def curses_main(self, stdscr):
+        color_testing = False
+
         # setup
         curses.start_color()
-        curses.use_default_colors()
         curses.cbreak()
         curses.noecho()
         stdscr.keypad(True)
         curses.curs_set(False)
+
+        curses.start_color()
+        curses.use_default_colors()
+
+        if color_testing == True:
+            self.color_testing(stdscr)
+
+        # define and test color palette
+        curses.init_pair(1, 255, 236) # white on dark grey
+        curses.init_pair(2, 154, 236) # green on dark grey
+        curses.init_pair(3, 196, 236) # red on dark grey
+        curses.init_pair(4, 255, 202) # white on orange
+
+        stdscr.bkgd(0, curses.color_pair(1))
+
+        if color_testing == True:
+            stdscr.addstr("normal ", curses.color_pair(1))
+            stdscr.addstr("green " , curses.color_pair(2))
+            stdscr.addstr("red ", curses.color_pair(3))
+            stdscr.addstr("white on orange ", curses.color_pair(4))
+
+            stdscr.getch()
+
 
         self.main_menu(stdscr)
 
     def main_menu(self, stdscr):
         stdscr.clear()
         current_item = 0
-        stdscr.addstr(1, 1, 'Book Tracker', curses.A_BOLD)
+        stdscr.addstr(1, 1, 'Book Tracker', curses.A_BOLD | curses.color_pair(0))
         stdscr.addstr(3, 1, '▣ Select book')
         stdscr.addstr(4, 1, '□ Create book')
         while True:
