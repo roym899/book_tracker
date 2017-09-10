@@ -15,7 +15,7 @@ class Interface:
         self.load()
 
     def save(self):
-        """ Saves the user data to ~/.book_tracker/pydo.yaml """
+        """ Saves the user data to ~/.book_tracker/books.yaml """
         home_dir = os.path.expanduser('~')
         user_dir = os.path.join(home_dir, '.book_tracker')
         try:
@@ -24,16 +24,16 @@ class Interface:
             if e.errno != errno.EEXIST:
                 raise
 
-        user_path = os.path.join(user_dir, 'pydo.yaml')
+        user_path = os.path.join(user_dir, 'books.yaml')
 
         with open(user_path, 'w') as books_file:
             yaml.dump(self.books, books_file)
 
     def load(self):
-        """ Loads the user data from ~/.book_tracker/pydo.yaml"""
+        """ Loads the user data from ~/.book_tracker/books.yaml"""
         home_dir = os.path.expanduser('~')
         user_dir = os.path.join(home_dir, '.book_tracker')
-        user_path = os.path.join(user_dir, 'pydo.yaml')
+        user_path = os.path.join(user_dir, 'books.yaml')
 
         try:
             with open(user_path, 'r') as books_file:
@@ -84,10 +84,6 @@ class Interface:
             self.book_selection(stdscr)
         elif current_item == 1:
             self.book_creation(stdscr)
-
-    def book_selection(self, stdscr):
-        stdscr.clear()
-        stdscr.addstr(1, 1, 'Book Tracker', curses.A_BOLD)
 
     def book_creation(self, stdscr):
         curses.echo()
@@ -196,3 +192,45 @@ class Interface:
                     break
 
         self.main_menu(stdscr)
+
+    def book_selection(self, stdscr):
+        """ Shows the book selection menu"""
+        current_item = 0
+        while True:
+            stdscr.clear()
+            stdscr.addstr(1, 1, 'Book Tracker', curses.A_BOLD)
+            row = 0
+            c = ' '
+            # shift is there so more books so you can scroll the list if there are more books than terminal lines
+            shift = min(current_item - curses.LINES + 5, len(self.books) - curses.LINES + 3)
+            for book_count, book in enumerate(self.books):
+                if shift > 0:
+                    shift = shift - 1
+                    continue
+
+                if 3+row >= curses.LINES:
+                    continue
+
+                if current_item == book_count:
+                    stdscr.addstr(3+row, 1, '▣ {title}'.format(title=book.name))
+                else:
+                    stdscr.addstr(3+row, 1, '□ {title}'.format(title=book.name))
+                row = row+1
+
+            # key handling
+            c = stdscr.getkey()
+
+            if c == 'KEY_RIGHT' or c == '\n':
+                self.book_reading(stdscr, self.books[current_item])
+            if c == 'KEY_UP':
+                current_item = (current_item - 1 + len(self.books)) % len(self.books)
+            if c == 'KEY_DOWN':
+                current_item = (current_item + 1 + len(self.books)) % len(self.books)
+            if c == 'KEY_LEFT':
+                break
+
+        self.main_menu(stdscr)
+
+    def book_reading(self, stdscr, book):
+        """ Shows the books page overview """
+        pass
