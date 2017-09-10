@@ -15,6 +15,12 @@ class Environment:
         self.issues = []
 
 class Interface:
+    KEY_ESC = 27
+    KEY_UP = 259
+    KEY_DOWN = 258
+    KEY_LEFT = 260
+    KEY_RIGHT = 261
+
     def __init__(self):
         self.environment = Environment()
         self.load()
@@ -51,6 +57,7 @@ class Interface:
             pass
 
     def run_loop(self):
+        os.environ.setdefault('ESCDELAY', '25')
         curses.wrapper(self.curses_main)
 
     def color_testing(self, stdscr):
@@ -241,6 +248,8 @@ class Interface:
 
     def book_selection(self, stdscr):
         """ Shows the book selection menu"""
+        curses.curs_set(False)
+
         current_item = 0
         while True:
             stdscr.clear()
@@ -279,4 +288,79 @@ class Interface:
 
     def book_reading(self, stdscr, book):
         """ Shows the books page overview """
-        pass
+
+        current_page = 0
+        first_row = 0
+        curses.curs_set(True)
+
+        while(True):
+            stdscr.clear()
+            size = stdscr.getmaxyx()
+            max_pages_per_line = 50
+            rows = size[0]
+            cols = min(size[1], max_pages_per_line+7)
+
+
+            stdscr.addstr(1, 1, 'Book Tracker ({rows}x{cols})'.format(rows=rows, cols=cols), curses.A_BOLD)
+            stdscr.addstr(rows-1, 0, '(🠉🠋🠈🠊) Move Cursor    (r) Mark as read    (i) Create issue    (Esc) Close book'.ljust(size[1]-1), curses.color_pair(4) | curses.A_BOLD)
+
+            rows_available = rows - 5
+            rows_needed = (len(book.pages)-1) // (cols-7) + 1
+            current_row = current_page // (cols - 7)
+
+            if current_page // (cols - 7) - first_row >= rows_available-1:
+                first_row = first_row + 1
+            if current_page // (cols - 7) - first_row <= 0:
+                first_row = first_row - 1
+
+            if first_row < 0:
+                first_row = 0
+            if first_row >= rows_needed - rows_available:
+                first_row = rows_needed - rows_available
+
+            for number, pagestate in enumerate(book.pages):
+                shift = 0
+                row = number // (cols - 7)
+                if row < first_row:
+                    continue
+
+                row = row - first_row
+
+                if row >= rows_available:
+                    continue
+
+                if number % (cols - 7) == 0:
+                    stdscr.addstr(row + 3, 1, str(number + 1).rjust(4))
+
+                # different color depending on page state
+                if pagestate == -1:
+                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '|', curses.color_pair(1))
+                elif pagestate == -2:
+                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '|', curses.color_pair(2))
+                else:
+                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '|', curses.color_pair(3))
+
+            stdscr.move(current_page // (cols - 7) + 3 - first_row, current_page % (cols - 7) + 6)
+
+            # key handling
+            c = stdscr.getch()
+            if c == Interface.KEY_RIGHT or c == '\n':
+                current_page = current_page + 1
+                if current_page >= len(book.pages):
+                    current_page = len(book.pages) - 1
+            if c == Interface.KEY_UP:
+                current_page = current_page - (cols - 7)
+                if current_page < 0:
+                    current_page = current_page + (cols - 7)
+            if c == Interface.KEY_DOWN:
+                current_page = current_page + (cols - 7)
+                if current_page >= len(book.pages):
+                    current_page = current_page - (cols - 7)
+            if c == Interface.KEY_LEFT:
+                current_page = current_page - 1
+                if current_page < 0:
+                    current_page = 0
+            if c == Interface.KEY_ESC:
+                break
+
+        self.book_selection(stdscr)
