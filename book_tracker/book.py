@@ -4,7 +4,7 @@
 
 class PageState:
     UNREAD = -1
-    GOOD = 0
+    GOOD = -2
 
 
 class Book:
