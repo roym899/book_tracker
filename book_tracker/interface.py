@@ -348,19 +348,24 @@ class Interface:
                 current_page = current_page + 1
                 if current_page >= len(book.pages):
                     current_page = len(book.pages) - 1
-            if c == Interface.KEY_UP:
+            elif c == Interface.KEY_UP:
                 current_page = current_page - (cols - 7)
                 if current_page < 0:
                     current_page = current_page + (cols - 7)
-            if c == Interface.KEY_DOWN:
+            elif c == Interface.KEY_DOWN:
                 current_page = current_page + (cols - 7)
                 if current_page >= len(book.pages):
                     current_page = current_page - (cols - 7)
-            if c == Interface.KEY_LEFT:
+            elif c == Interface.KEY_LEFT:
                 current_page = current_page - 1
                 if current_page < 0:
                     current_page = 0
-            if c == Interface.KEY_ESC:
+            elif c == Interface.KEY_ESC:
                 break
+            else:
+                stdscr.addstr(1, 1, 'Book Tracker ({rows}x{cols}, {c})'.format(rows=rows, cols=cols, c=c), curses.A_BOLD)
+                stdscr.getch()
+
+
 
         self.book_selection(stdscr)
