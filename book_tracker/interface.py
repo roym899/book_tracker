@@ -20,6 +20,11 @@ class Interface:
     KEY_DOWN = 258
     KEY_LEFT = 260
     KEY_RIGHT = 261
+    KEY_R = 114
+    KEY_I = 105
+    KEY_RESIZE = 410
+
+
 
     def __init__(self):
         self.environment = Environment()
@@ -74,11 +79,11 @@ class Interface:
             pass
 
         stdscr.getch()
-        stdscr.clear()
+        stdscr.erase()
 
 
     def curses_main(self, stdscr):
-        color_testing = False
+        color_testing = True
 
         # setup
         curses.start_color()
@@ -95,7 +100,7 @@ class Interface:
 
         # define and test color palette
         curses.init_pair(1, 255, 236) # white on dark grey
-        curses.init_pair(2, 154, 236) # green on dark grey
+        curses.init_pair(2, 46, 236) # green on dark grey
         curses.init_pair(3, 196, 236) # red on dark grey
         curses.init_pair(4, 255, 202) # white on orange
 
@@ -113,7 +118,7 @@ class Interface:
         self.main_menu(stdscr)
 
     def main_menu(self, stdscr):
-        stdscr.clear()
+        stdscr.erase()
         current_item = 0
         stdscr.addstr(1, 1, 'Book Tracker', curses.A_BOLD | curses.color_pair(0))
         stdscr.addstr(3, 1, '▣ Select book')
@@ -141,7 +146,7 @@ class Interface:
     def book_creation(self, stdscr):
         curses.echo()
 
-        stdscr.clear()
+        stdscr.erase()
         current_item = 0
 
         stdscr.addstr(1, 1, 'Book Tracker', curses.A_BOLD)
@@ -252,7 +257,7 @@ class Interface:
 
         current_item = 0
         while True:
-            stdscr.clear()
+            stdscr.erase()
             stdscr.addstr(1, 1, 'Book Tracker', curses.A_BOLD)
             row = 0
             c = ' '
@@ -286,7 +291,7 @@ class Interface:
 
         self.main_menu(stdscr)
 
-    def book_reading(self, stdscr, book):
+    def book_reading(self, stdscr, current_book):
         """ Shows the books page overview """
 
         current_page = 0
@@ -294,7 +299,7 @@ class Interface:
         curses.curs_set(True)
 
         while(True):
-            stdscr.clear()
+            stdscr.erase()
             size = stdscr.getmaxyx()
             max_pages_per_line = 50
             rows = size[0]
@@ -302,10 +307,10 @@ class Interface:
 
 
             stdscr.addstr(1, 1, 'Book Tracker ({rows}x{cols})'.format(rows=rows, cols=cols), curses.A_BOLD)
-            stdscr.addstr(rows-1, 0, '(🠉🠋🠈🠊) Move Cursor    (r) Mark as read    (i) Create issue    (Esc) Close book'.ljust(size[1]-1), curses.color_pair(4) | curses.A_BOLD)
+            stdscr.addstr(rows-1, 0, '(🠉🠋🠈🠊) Move Cursor  (r) Mark as read/unread  (i) Create issue  (Esc) Close book'.ljust(size[1]-1), curses.color_pair(4) | curses.A_BOLD)
 
             rows_available = rows - 5
-            rows_needed = (len(book.pages)-1) // (cols-7) + 1
+            rows_needed = (len(current_book.pages)-1) // (cols-7) + 1
             current_row = current_page // (cols - 7)
 
             if current_page // (cols - 7) - first_row >= rows_available-1:
@@ -318,7 +323,7 @@ class Interface:
             if first_row >= rows_needed - rows_available:
                 first_row = rows_needed - rows_available
 
-            for number, pagestate in enumerate(book.pages):
+            for number, pagestate in enumerate(current_book.pages):
                 shift = 0
                 row = number // (cols - 7)
                 if row < first_row:
@@ -333,12 +338,12 @@ class Interface:
                     stdscr.addstr(row + 3, 1, str(number + 1).rjust(4))
 
                 # different color depending on page state
-                if pagestate == -1:
-                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '|', curses.color_pair(1))
-                elif pagestate == -2:
-                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '|', curses.color_pair(2))
+                if pagestate == book.Book.UNREAD:
+                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(1) | curses.A_BOLD)
+                elif pagestate == book.Book.READ:
+                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(2) | curses.A_BOLD)
                 else:
-                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '|', curses.color_pair(3))
+                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(3) | curses.A_BOLD)
 
             stdscr.move(current_page // (cols - 7) + 3 - first_row, current_page % (cols - 7) + 6)
 
@@ -346,15 +351,15 @@ class Interface:
             c = stdscr.getch()
             if c == Interface.KEY_RIGHT or c == '\n':
                 current_page = current_page + 1
-                if current_page >= len(book.pages):
-                    current_page = len(book.pages) - 1
+                if current_page >= len(current_book.pages):
+                    current_page = len(current_book.pages) - 1
             elif c == Interface.KEY_UP:
                 current_page = current_page - (cols - 7)
                 if current_page < 0:
                     current_page = current_page + (cols - 7)
             elif c == Interface.KEY_DOWN:
                 current_page = current_page + (cols - 7)
-                if current_page >= len(book.pages):
+                if current_page >= len(current_book.pages):
                     current_page = current_page - (cols - 7)
             elif c == Interface.KEY_LEFT:
                 current_page = current_page - 1
@@ -362,10 +367,18 @@ class Interface:
                     current_page = 0
             elif c == Interface.KEY_ESC:
                 break
+            elif c == Interface.KEY_R:
+                if current_book.pages[current_page] == book.Book.READ:
+                    current_book.pages[current_page] = book.Book.UNREAD
+                else:
+                    current_book.pages[current_page] = book.Book.READ
+
+                self.save()
+            elif c == Interface.KEY_RESIZE:
+                pass
             else:
                 stdscr.addstr(1, 1, 'Book Tracker ({rows}x{cols}, {c})'.format(rows=rows, cols=cols, c=c), curses.A_BOLD)
                 stdscr.getch()
-
 
 
         self.book_selection(stdscr)
