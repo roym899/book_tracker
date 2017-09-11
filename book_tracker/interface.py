@@ -103,6 +103,7 @@ class Interface:
         curses.init_pair(2, 46, 236) # green on dark grey
         curses.init_pair(3, 196, 236) # red on dark grey
         curses.init_pair(4, 255, 202) # white on orange
+        curses.init_pair(5, 255, 239) # white on light grey
 
         stdscr.bkgd(0, curses.color_pair(1))
 
@@ -235,7 +236,7 @@ class Interface:
                     year = stdscr.instr(5, 12, 4).decode('UTF-8').rstrip()
                     pages = stdscr.instr(6, 12, 4).decode('UTF-8').rstrip()
                     if book.valid_book_definition(name, author, year, pages):
-                        self.environment.books.append(book.Book(name, author, int(year), int(pages)))
+                        self.environment.books.append(book.Book(name, author, int(year), int(pages), self.environment.books))
                         self.save()
                         break
             elif current_item == 5:
@@ -372,8 +373,9 @@ class Interface:
                     current_book.pages[current_page] = book.Book.UNREAD
                 else:
                     current_book.pages[current_page] = book.Book.READ
-
                 self.save()
+            elif c == Interface.KEY_I:
+                self.issue_editor(stdscr)
             elif c == Interface.KEY_RESIZE:
                 pass
             else:
@@ -382,3 +384,26 @@ class Interface:
 
 
         self.book_selection(stdscr)
+
+    def issue_editor(self, stdscr):
+        left_margin = 1
+        right_margin = 1
+        top_margin = 2
+        bottom_margin = 2
+        size = stdscr.getmaxyx()
+        full_rows = size[0]
+        full_cols = size[1]
+        win = curses.newwin(5, 5, 3, 6)
+
+        stdscr.addstr(0, 0, 'Issue #{issue}@'.format(issue=len(self.environment.issues)), curses.A_BOLD)
+        stdscr.addstr(rows - 1, 0,
+                      '(🠉🠋🠈🠊) Move Cursor  (r) Mark as read/unread  (i) Create issue  (Esc) Close book'.ljust(
+                          size[1] - 1), curses.color_pair(4) | curses.A_BOLD)
+
+        win.bkgd(0, curses.color_pair(5))
+        win.move(left_margin,top_margin)
+
+        while(True):
+            c = win.getch()
+            if c == Interface.KEY_ESC:
+                break
