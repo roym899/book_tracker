@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import book
+import issue
 
 import curses
 import time
@@ -8,6 +9,17 @@ import sys
 import yaml
 import os
 import errno
+import time
+import datetime
+
+import locale
+locale.setlocale(locale.LC_ALL, '')
+code = locale.getpreferredencoding()
+
+
+def utc_to_local(utc_dt):
+    return utc_dt.replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
+
 
 class Environment:
     def __init__(self):
@@ -21,8 +33,18 @@ class Interface:
     KEY_LEFT = 260
     KEY_RIGHT = 261
     KEY_R = 114
+    KEY_SHIFT_R =82
     KEY_I = 105
     KEY_RESIZE = 410
+    KEY_BACKSPACE = 263
+    KEY_CTRL_X = 24
+    KEY_CTRL_D = 4
+    KEY_CTRL_LEFT = 68
+    KEY_CTRL_RIGHT = 67
+    KEY_ENTER = 10
+    KEY_F1 = 265
+    KEY_F2 = 266
+    KEY_CTRL_L = 12
 
 
 
@@ -115,11 +137,10 @@ class Interface:
 
             stdscr.getch()
 
-
         self.main_menu(stdscr)
 
     def main_menu(self, stdscr):
-        stdscr.erase()
+        stdscr.clear()
         current_item = 0
         stdscr.addstr(1, 1, 'Book Tracker', curses.A_BOLD | curses.color_pair(0))
         stdscr.addstr(3, 1, '▣ Select book')
@@ -147,7 +168,7 @@ class Interface:
     def book_creation(self, stdscr):
         curses.echo()
 
-        stdscr.erase()
+        stdscr.clear()
         current_item = 0
 
         stdscr.addstr(1, 1, 'Book Tracker', curses.A_BOLD)
@@ -255,6 +276,7 @@ class Interface:
     def book_selection(self, stdscr):
         """ Shows the book selection menu"""
         curses.curs_set(False)
+        stdscr.clear()
 
         current_item = 0
         while True:
@@ -273,9 +295,9 @@ class Interface:
                     continue
 
                 if current_item == book_count:
-                    stdscr.addstr(3+row, 1, '▣ {title}'.format(title=book.name))
+                    stdscr.addstr(3+row, 1, '▣ {title}'.format(title=book.title))
                 else:
-                    stdscr.addstr(3+row, 1, '□ {title}'.format(title=book.name))
+                    stdscr.addstr(3+row, 1, '□ {title}'.format(title=book.title))
                 row = row+1
 
             # key handling
@@ -298,21 +320,24 @@ class Interface:
         current_page = 0
         first_row = 0
         curses.curs_set(True)
+        stdscr.clear()
 
-        while(True):
-            stdscr.erase()
+        while True:
             size = stdscr.getmaxyx()
             max_pages_per_line = 50
             rows = size[0]
             cols = min(size[1], max_pages_per_line+7)
 
-
             stdscr.addstr(1, 1, 'Book Tracker ({rows}x{cols})'.format(rows=rows, cols=cols), curses.A_BOLD)
-            stdscr.addstr(rows-1, 0, '(🠉🠋🠈🠊) Move Cursor  (r) Mark as read/unread  (i) Create issue  (Esc) Close book'.ljust(size[1]-1), curses.color_pair(4) | curses.A_BOLD)
+            pagestring = '(@{book_id}:{current_page})'.format(book_id=current_book.identifier,
+                                                              current_page=current_page+1)
+            stdscr.addstr(rows-1, 0,
+                          '(🠉🠋🠈🠊) Move Cursor  (r/R) Mark as read/unread (i) Create/Open issue  (Esc) Close book'
+                          .ljust(size[1]-1-len(pagestring))+pagestring,
+                          curses.color_pair(4) | curses.A_BOLD)
 
             rows_available = rows - 5
             rows_needed = (len(current_book.pages)-1) // (cols-7) + 1
-            current_row = current_page // (cols - 7)
 
             if current_page // (cols - 7) - first_row >= rows_available-1:
                 first_row = first_row + 1
@@ -325,7 +350,6 @@ class Interface:
                 first_row = rows_needed - rows_available
 
             for number, pagestate in enumerate(current_book.pages):
-                shift = 0
                 row = number // (cols - 7)
                 if row < first_row:
                     continue
@@ -371,39 +395,175 @@ class Interface:
             elif c == Interface.KEY_R:
                 if current_book.pages[current_page] == book.Book.READ:
                     current_book.pages[current_page] = book.Book.UNREAD
+                elif current_book.pages[current_page] == book.Book.UNREAD:
+                    current_book.pages[current_page] = book.Book.READ
+                self.save()
+            elif c == Interface.KEY_SHIFT_R:
+                if current_book.pages[current_page] == book.Book.READ:
+                    current_book.pages[current_page] = book.Book.UNREAD
                 else:
                     current_book.pages[current_page] = book.Book.READ
                 self.save()
             elif c == Interface.KEY_I:
-                self.issue_editor(stdscr)
+                issue = self.issue_editor(stdscr, current_book, current_page)
             elif c == Interface.KEY_RESIZE:
+                stdscr.erase()
                 pass
             else:
-                stdscr.addstr(1, 1, 'Book Tracker ({rows}x{cols}, {c})'.format(rows=rows, cols=cols, c=c), curses.A_BOLD)
+                stdscr.addstr(1, 1, 'Book Tracker ({rows}x{cols}, {c})'.format(rows=rows, cols=cols, c=c),
+                              curses.A_BOLD)
                 stdscr.getch()
-
 
         self.book_selection(stdscr)
 
-    def issue_editor(self, stdscr):
+    def issue_editor(self, stdscr, current_book=None, current_page=None):
         left_margin = 1
         right_margin = 1
         top_margin = 2
         bottom_margin = 2
+        date_width = 11
         size = stdscr.getmaxyx()
-        full_rows = size[0]
-        full_cols = size[1]
-        win = curses.newwin(5, 5, 3, 6)
+        stdscr.keypad(True)
+        stdscr.clear()
+        curses.noecho()
 
-        stdscr.addstr(0, 0, 'Issue #{issue}@'.format(issue=len(self.environment.issues)), curses.A_BOLD)
-        stdscr.addstr(rows - 1, 0,
-                      '(🠉🠋🠈🠊) Move Cursor  (r) Mark as read/unread  (i) Create issue  (Esc) Close book'.ljust(
-                          size[1] - 1), curses.color_pair(4) | curses.A_BOLD)
+        if current_book is not None and current_book.pages[current_page] >= 0:
+            current_issue_id = current_book.pages[current_page]
+            current_issue = self.environment.issues[current_issue_id]
+        else:
+            current_issue = issue.Issue()
+            current_issue_id = len(self.environment.issues)
 
-        win.bkgd(0, curses.color_pair(5))
-        win.move(left_margin,top_margin)
+        current_text = ""
+        current_cursor_position = 0
 
-        while(True):
-            c = win.getch()
-            if c == Interface.KEY_ESC:
-                break
+        c = 0
+
+        while True:
+            stdscr.erase()
+
+            current_row = top_margin
+
+            stdscr.addstr(0, 0, 'Issue #{issue} ({char})'
+                          .format(issue=current_issue_id,
+                                  char=c),
+                          curses.A_BOLD)
+
+            if current_book is not None:
+                pagestring = '(@{book_id}:{current_page})'.format(book_id=current_book.identifier,
+                                                                  current_page=current_page+1)
+                stdscr.addstr(size[0]-1, 0, '(🠉🠋🠈🠊) Scroll/Move Cursor  (F1 F2) Select Issue'
+                                            '  (^D) Save and Exit  (^X) Discard and Exit'
+                              .ljust(size[1]-1-len(pagestring))+pagestring,
+                              curses.color_pair(4) | curses.A_BOLD)
+
+            # add all the previous comments if there are any for the selected issue
+            for comment in current_issue.comments:
+                # the creation date
+                stdscr.addstr(current_row, left_margin, utc_to_local(comment.created).strftime("%Y-%m-%d"))
+                stdscr.addstr(current_row+1, left_margin, utc_to_local(comment.created).strftime("%H:%M"))
+                # the actual comment
+                row = current_row
+                col = left_margin+date_width
+                for index, c in enumerate(comment.text):
+                    stdscr.addstr(row, col, c)
+
+                    current_row = row + 2
+
+                    col = col + 1
+                    if col >= size[1] - right_margin - 1:
+                        col = left_margin+date_width
+                        row = row + 1
+
+
+            # add the current comment element
+            # first the date and time
+            utcnow = datetime.datetime.utcnow()
+            stdscr.addstr(current_row, left_margin, utc_to_local(utcnow).strftime("%Y-%m-%d"))
+            stdscr.addstr(current_row+1, left_margin, utc_to_local(utcnow).strftime("%H:%M"))
+            # second the current text
+            row = current_row
+            col = left_margin+date_width
+            cursor_row = 0
+            cursor_col = 0
+            for index, c in enumerate(current_text):
+                stdscr.addstr(row, col, c)
+
+                if index == current_cursor_position:
+                    cursor_row = row
+                    cursor_col = col
+
+                col = col + 1
+                if col >= size[1] - right_margin - 1:
+                    col = left_margin+date_width
+                    row = row + 1
+            # set the right cursor position
+            if current_cursor_position < len(current_text):
+                stdscr.move(cursor_row, cursor_col)
+            else:
+                stdscr.move(row, col)
+
+            c = stdscr.getch()
+            if c == Interface.KEY_RESIZE:
+                size = stdscr.getmaxyx()
+            elif c == Interface.KEY_BACKSPACE:
+                if current_cursor_position > 0:
+                    current_text = current_text[:current_cursor_position-1]+current_text[current_cursor_position:]
+                    current_cursor_position = current_cursor_position - 1
+            elif c == Interface.KEY_UP:
+                pass
+            elif c == Interface.KEY_DOWN:
+                pass
+            elif c == Interface.KEY_LEFT:
+                current_cursor_position = current_cursor_position - 1
+                if current_cursor_position < 0:
+                    current_cursor_position = 0
+            elif c == Interface.KEY_RIGHT:
+                current_cursor_position = current_cursor_position + 1
+                if current_cursor_position > len(current_text):
+                    current_cursor_position = len(current_text)
+            elif c == Interface.KEY_CTRL_X:
+                stdscr.clear()
+                return None
+            elif c == Interface.KEY_CTRL_D:
+                if len(current_text) > 10:
+                    current_issue.add_comment(current_text)
+                    if current_issue_id == len(self.environment.issues):
+                        self.environment.issues.append(current_issue)
+                    if current_book is not None:
+                        current_book.pages[current_page] = current_issue_id
+                    self.save()
+                    stdscr.clear()
+                    return current_issue
+            elif c == Interface.KEY_F1:
+                current_issue_id = current_issue_id - 1
+                if current_issue_id < 0:
+                    current_issue_id = 0
+                if current_issue_id >= len(self.environment.issues):
+                    current_issue_id = len(self.environment.issues)
+                    current_issue = issue.Issue()
+                else:
+                    current_issue = self.environment.issues[current_issue_id]
+            elif c == Interface.KEY_F2:
+                current_issue_id = current_issue_id + 1
+                if current_issue_id >= len(self.environment.issues):
+                    current_issue_id = len(self.environment.issues)
+                    current_issue = issue.Issue()
+                else:
+                    current_issue = self.environment.issues[current_issue_id]
+            elif c == Interface.KEY_ENTER:
+                pass
+            elif c == Interface.KEY_CTRL_L:
+                if current_issue_id != len(self.environment.issues):
+                    current_issue.closed = utcnow
+                    for b in self.environment.books:
+                        for i, p in enumerate(b.pages):
+                            if p == current_issue_id:
+                                b.pages[i] = book.Book.READ
+                    self.save()
+                    stdscr.clear()
+                    return None
+
+            else:
+                current_text = current_text[:current_cursor_position]+chr(c)+current_text[current_cursor_position:]
+                current_cursor_position = current_cursor_position + 1
