@@ -44,6 +44,7 @@ class Interface:
     KEY_ENTER = 10
     KEY_F1 = 265
     KEY_F2 = 266
+    KEY_F3 = 267
     KEY_CTRL_L = 12
 
 
@@ -398,14 +399,21 @@ class Interface:
                 elif current_book.pages[current_page] == book.Book.UNREAD:
                     current_book.pages[current_page] = book.Book.READ
                 self.save()
+                current_page = current_page + 1
+                if current_page >= len(current_book.pages):
+                    current_page = len(current_book.pages) - 1
             elif c == Interface.KEY_SHIFT_R:
                 if current_book.pages[current_page] == book.Book.READ:
                     current_book.pages[current_page] = book.Book.UNREAD
                 else:
                     current_book.pages[current_page] = book.Book.READ
                 self.save()
+                current_page = current_page + 1
+                if current_page >= len(current_book.pages):
+                    current_page = len(current_book.pages) - 1
             elif c == Interface.KEY_I:
                 issue = self.issue_editor(stdscr, current_book, current_page)
+                curses.curs_set(True)
             elif c == Interface.KEY_RESIZE:
                 stdscr.erase()
                 pass
@@ -453,7 +461,7 @@ class Interface:
                 pagestring = '(@{book_id}:{current_page})'.format(book_id=current_book.identifier,
                                                                   current_page=current_page+1)
                 stdscr.addstr(size[0]-1, 0, '(🠉🠋🠈🠊) Scroll/Move Cursor  (F1 F2) Select Issue'
-                                            '  (^D) Save and Exit  (^X) Discard and Exit'
+                                            '  (^L) Close and Exit  (^D) Save and Exit  (^X) Discard and Exit'
                               .ljust(size[1]-1-len(pagestring))+pagestring,
                               curses.color_pair(4) | curses.A_BOLD)
 
@@ -475,33 +483,39 @@ class Interface:
                         col = left_margin+date_width
                         row = row + 1
 
-
-            # add the current comment element
-            # first the date and time
-            utcnow = datetime.datetime.utcnow()
-            stdscr.addstr(current_row, left_margin, utc_to_local(utcnow).strftime("%Y-%m-%d"))
-            stdscr.addstr(current_row+1, left_margin, utc_to_local(utcnow).strftime("%H:%M"))
-            # second the current text
-            row = current_row
-            col = left_margin+date_width
-            cursor_row = 0
-            cursor_col = 0
-            for index, c in enumerate(current_text):
-                stdscr.addstr(row, col, c)
-
-                if index == current_cursor_position:
-                    cursor_row = row
-                    cursor_col = col
-
-                col = col + 1
-                if col >= size[1] - right_margin - 1:
-                    col = left_margin+date_width
-                    row = row + 1
-            # set the right cursor position
-            if current_cursor_position < len(current_text):
-                stdscr.move(cursor_row, cursor_col)
+            if current_issue.is_closed():
+                curses.curs_set(False)
+                stdscr.addstr(current_row, left_margin, utc_to_local(current_issue.closed).strftime("%Y-%m-%d"))
+                stdscr.addstr(current_row+1, left_margin, utc_to_local(current_issue.closed).strftime("%H:%M"))
+                stdscr.addstr(current_row, left_margin+date_width, "Issue closed.")
             else:
-                stdscr.move(row, col)
+                curses.curs_set(True)
+                # add the current comment element
+                # first the date and time
+                utcnow = datetime.datetime.utcnow()
+                stdscr.addstr(current_row, left_margin, utc_to_local(utcnow).strftime("%Y-%m-%d"))
+                stdscr.addstr(current_row+1, left_margin, utc_to_local(utcnow).strftime("%H:%M"))
+                # second the current text
+                row = current_row
+                col = left_margin+date_width
+                cursor_row = 0
+                cursor_col = 0
+                for index, c in enumerate(current_text):
+                    stdscr.addstr(row, col, c)
+
+                    if index == current_cursor_position:
+                        cursor_row = row
+                        cursor_col = col
+
+                    col = col + 1
+                    if col >= size[1] - right_margin - 1:
+                        col = left_margin+date_width
+                        row = row + 1
+                # set the right cursor position
+                if current_cursor_position < len(current_text):
+                    stdscr.move(cursor_row, cursor_col)
+                else:
+                    stdscr.move(row, col)
 
             c = stdscr.getch()
             if c == Interface.KEY_RESIZE:
@@ -535,7 +549,7 @@ class Interface:
                     self.save()
                     stdscr.clear()
                     return current_issue
-            elif c == Interface.KEY_F1:
+            elif c == Interface.KEY_F2:
                 current_issue_id = current_issue_id - 1
                 if current_issue_id < 0:
                     current_issue_id = 0
@@ -544,7 +558,7 @@ class Interface:
                     current_issue = issue.Issue()
                 else:
                     current_issue = self.environment.issues[current_issue_id]
-            elif c == Interface.KEY_F2:
+            elif c == Interface.KEY_F3:
                 current_issue_id = current_issue_id + 1
                 if current_issue_id >= len(self.environment.issues):
                     current_issue_id = len(self.environment.issues)

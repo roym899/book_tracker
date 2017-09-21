@@ -14,6 +14,15 @@ class Issue:
     def add_comment(self, text, book=None, page=None):
         self.comments.append(Comment(text))
 
+    def close(self):
+        self.closed = datetime.datetime.utcnow()
+
+    def is_closed(self):
+        if self.closed is None:
+            return False
+        else:
+            return True
+
 
 class Comment:
     def __init__(self, text, book=None, page=None):
