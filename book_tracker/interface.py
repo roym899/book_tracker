@@ -32,6 +32,10 @@ class Interface:
     KEY_DOWN = 258
     KEY_LEFT = 260
     KEY_RIGHT = 261
+    KEY_SHIFT_UP = 337
+    KEY_SHIFT_DOWN = 336
+    KEY_SHIFT_LEFT = 393
+    KEY_SHIFT_RIGHT = 402
     KEY_R = 114
     KEY_SHIFT_R =82
     KEY_I = 105
@@ -127,6 +131,9 @@ class Interface:
         curses.init_pair(3, 196, 236) # red on dark grey
         curses.init_pair(4, 255, 202) # white on orange
         curses.init_pair(5, 255, 239) # white on light grey
+        curses.init_pair(6, 255, 202) # white on orange
+        curses.init_pair(7, 46, 202) # green on orange
+        curses.init_pair(8, 196, 202) # red on orange
 
         stdscr.bkgd(0, curses.color_pair(1))
 
@@ -323,19 +330,30 @@ class Interface:
         curses.curs_set(True)
         stdscr.clear()
 
+        current_pages_start = None
+
         while True:
             size = stdscr.getmaxyx()
             max_pages_per_line = 50
             rows = size[0]
             cols = min(size[1], max_pages_per_line+7)
 
-            stdscr.addstr(1, 1, 'Book Tracker ({rows}x{cols})'.format(rows=rows, cols=cols), curses.A_BOLD)
-            pagestring = '(@{book_id}:{current_page})'.format(book_id=current_book.identifier,
-                                                              current_page=current_page+1)
-            stdscr.addstr(rows-1, 0,
-                          '(🠉🠋🠈🠊) Move Cursor  (r/R) Mark as read/unread (i) Create/Open issue  (Esc) Close book'
-                          .ljust(size[1]-1-len(pagestring))+pagestring,
-                          curses.color_pair(4) | curses.A_BOLD)
+            stdscr.addstr(1, 1, 'Book Tracker ({rows}x{cols}), ({start}-{end})'.format(rows=rows, cols=cols, start=current_pages_start, end=current_page), curses.A_BOLD)
+
+            if current_pages_start is None:
+                pagestring = '(@{book_id}:{current_page})'.format(book_id=current_book.identifier,
+                                                                  current_page=current_page + 1)
+            else:
+                pagestring = '(@{book_id}:{current_page_start}-{current_page_end})' \
+                    .format(book_id=current_book.identifier,
+                            current_page_start=min([current_pages_start, current_page])+1,
+                            current_page_end=max([current_pages_start, current_page])+1)
+
+            stdscr.addnstr(rows-1, 0,
+                           '(🠉🠋🠈🠊) Move Cursor  (r/R) Mark as read/unread (i) Create/Open issue  (Esc) Close book'
+                           .ljust(size[1]-1-len(pagestring))+pagestring,
+                           size[1]-1,
+                           curses.color_pair(4) | curses.A_BOLD)
 
             rows_available = rows - 5
             rows_needed = (len(current_book.pages)-1) // (cols-7) + 1
@@ -365,11 +383,26 @@ class Interface:
 
                 # different color depending on page state
                 if pagestate == book.Book.UNREAD:
-                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(1) | curses.A_BOLD)
+                    if current_pages_start is not None and \
+                                    abs(current_page - current_pages_start) >= abs(current_page - number) and \
+                                    abs(current_page - current_pages_start) >= abs(current_pages_start - number):
+                        stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(6) | curses.A_BOLD)
+                    else:
+                        stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(1) | curses.A_BOLD)
                 elif pagestate == book.Book.READ:
-                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(2) | curses.A_BOLD)
+                    if current_pages_start is not None and \
+                                    abs(current_page - current_pages_start) >= abs(current_page - number) and \
+                                    abs(current_page - current_pages_start) >= abs(current_pages_start - number):
+                        stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(7) | curses.A_BOLD)
+                    else:
+                        stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(2) | curses.A_BOLD)
                 else:
-                    stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(3) | curses.A_BOLD)
+                    if current_pages_start is not None and \
+                                    abs(current_page - current_pages_start) >= abs(current_page - number) and \
+                                    abs(current_page - current_pages_start) >= abs(current_pages_start - number):
+                        stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(8) | curses.A_BOLD)
+                    else:
+                        stdscr.addstr(row + 3, number % (cols - 7) + 6, '▮', curses.color_pair(3) | curses.A_BOLD)
 
             stdscr.move(current_page // (cols - 7) + 3 - first_row, current_page % (cols - 7) + 6)
 
@@ -379,40 +412,90 @@ class Interface:
                 current_page = current_page + 1
                 if current_page >= len(current_book.pages):
                     current_page = len(current_book.pages) - 1
+                current_pages_start = None
+                current_pages_end = None
             elif c == Interface.KEY_UP:
                 current_page = current_page - (cols - 7)
                 if current_page < 0:
                     current_page = current_page + (cols - 7)
+                current_pages_start = None
+                current_pages_end = None
             elif c == Interface.KEY_DOWN:
                 current_page = current_page + (cols - 7)
                 if current_page >= len(current_book.pages):
                     current_page = current_page - (cols - 7)
+                current_pages_start = None
+                current_pages_end = None
             elif c == Interface.KEY_LEFT:
                 current_page = current_page - 1
                 if current_page < 0:
                     current_page = 0
+                current_pages_start = None
+                current_pages_end = None
+            elif c == Interface.KEY_SHIFT_LEFT:
+                if current_pages_start is None:
+                    current_pages_start = current_page
+
+                current_page = current_page - 1
+                if current_page < 0:
+                    current_page = 0
+
+                if current_pages_start == current_page:
+                    current_pages_start = None
+
+            elif c == Interface.KEY_SHIFT_RIGHT:
+                if current_pages_start is None:
+                    current_pages_start = current_page
+
+                current_page = current_page + 1
+                if current_page >= len(current_book.pages):
+                    current_page = len(current_book.pages) - 1
+
+                if current_pages_start == current_page:
+                    current_pages_start = None
+
             elif c == Interface.KEY_ESC:
                 break
             elif c == Interface.KEY_R:
-                if current_book.pages[current_page] == book.Book.READ:
-                    current_book.pages[current_page] = book.Book.UNREAD
-                elif current_book.pages[current_page] == book.Book.UNREAD:
-                    current_book.pages[current_page] = book.Book.READ
+                if current_pages_start is None:
+                    current_pages = [current_page]
+                else:
+                    current_pages = list(range(min(current_page, current_pages_start),
+                                               max(current_page, current_pages_start) + 1))
+
+                for cp in current_pages:
+                    if current_book.pages[cp] == book.Book.READ:
+                        current_book.pages[cp] = book.Book.UNREAD
+                    elif current_book.pages[cp] == book.Book.UNREAD:
+                        current_book.pages[cp] = book.Book.READ
                 self.save()
                 current_page = current_page + 1
                 if current_page >= len(current_book.pages):
                     current_page = len(current_book.pages) - 1
             elif c == Interface.KEY_SHIFT_R:
-                if current_book.pages[current_page] == book.Book.READ:
-                    current_book.pages[current_page] = book.Book.UNREAD
+                if current_pages_start is None:
+                    current_pages = [current_page]
                 else:
-                    current_book.pages[current_page] = book.Book.READ
+                    current_pages = list(range(min(current_page, current_pages_start),
+                                               max(current_page, current_pages_start) + 1))
+
+                for cp in current_pages:
+                    if current_book.pages[cp] == book.Book.READ:
+                        current_book.pages[cp] = book.Book.UNREAD
+                    else:
+                        current_book.pages[cp] = book.Book.READ
+
                 self.save()
                 current_page = current_page + 1
                 if current_page >= len(current_book.pages):
                     current_page = len(current_book.pages) - 1
             elif c == Interface.KEY_I:
-                issue = self.issue_editor(stdscr, current_book, current_page)
+                if current_pages_start is None:
+                    issue = self.issue_editor(stdscr, current_book, [current_page])
+                else:
+                    issue = self.issue_editor(stdscr, current_book,
+                                              list(range(min(current_page,current_pages_start),
+                                                         max(current_page, current_pages_start)+1)))
                 curses.curs_set(True)
             elif c == Interface.KEY_RESIZE:
                 stdscr.erase()
@@ -424,7 +507,8 @@ class Interface:
 
         self.book_selection(stdscr)
 
-    def issue_editor(self, stdscr, current_book=None, current_page=None):
+    def issue_editor(self, stdscr, current_book=None, current_pages=None):
+        """ current_pages is a list of pages or None if the issue editor has not been opened from a specific page"""
         left_margin = 1
         right_margin = 1
         top_margin = 2
@@ -435,8 +519,8 @@ class Interface:
         stdscr.clear()
         curses.noecho()
 
-        if current_book is not None and current_book.pages[current_page] >= 0:
-            current_issue_id = current_book.pages[current_page]
+        if current_book is not None and current_book.pages[current_pages[0]] >= 0:
+            current_issue_id = current_book.pages[current_pages[0]]
             current_issue = self.environment.issues[current_issue_id]
         else:
             current_issue = issue.Issue()
@@ -458,12 +542,19 @@ class Interface:
                           curses.A_BOLD)
 
             if current_book is not None:
-                pagestring = '(@{book_id}:{current_page})'.format(book_id=current_book.identifier,
-                                                                  current_page=current_page+1)
-                stdscr.addstr(size[0]-1, 0, '(🠉🠋🠈🠊) Scroll/Move Cursor  (F1 F2) Select Issue'
-                                            '  (^L) Close and Exit  (^D) Save and Exit  (^X) Discard and Exit'
-                              .ljust(size[1]-1-len(pagestring))+pagestring,
-                              curses.color_pair(4) | curses.A_BOLD)
+                if len(current_pages) == 1:
+                    pagestring = '(@{book_id}:{current_page})'.format(book_id=current_book.identifier,
+                                                                      current_page=current_pages[0]+1)
+                else:
+                    pagestring = '(@{book_id}:{current_page_start}-{current_page_end})'\
+                        .format(book_id=current_book.identifier,
+                                current_page_start=current_pages[0]+1,
+                                current_page_end=current_pages[-1]+1)
+                stdscr.addnstr(size[0]-1, 0, '(🠉🠋🠈🠊) Scroll/Move Cursor  (F1 F2) Select Issue'
+                                             '  (^L) Close and Exit  (^D) Save and Exit  (^X) Discard and Exit'
+                               .ljust(size[1]-1-len(pagestring))+pagestring,
+                               size[1]-1,
+                               curses.color_pair(4) | curses.A_BOLD)
 
             # add all the previous comments if there are any for the selected issue
             for comment in current_issue.comments:
@@ -545,7 +636,8 @@ class Interface:
                     if current_issue_id == len(self.environment.issues):
                         self.environment.issues.append(current_issue)
                     if current_book is not None:
-                        current_book.pages[current_page] = current_issue_id
+                        for current_page in current_pages:
+                            current_book.pages[current_page] = current_issue_id
                     self.save()
                     stdscr.clear()
                     return current_issue
